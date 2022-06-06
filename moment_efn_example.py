@@ -3,7 +3,7 @@ import numpy as np
 
 # energyflow imports
 import energyflow as ef
-from energyflow.archs import EFN
+from energyflow.archs.moment import EFN_moment
 from energyflow.datasets import qg_jets
 from energyflow.utils import data_split, to_categorical
 
@@ -19,10 +19,9 @@ train, val, test = 75000, 10000, 15000
 # train, val, test = 1000000, 200000, 200000
 
 # network architecture parameters
-Phi_sizes, F_sizes = (100, 100), (100, 100, 100)
+Phi_sizes, F_sizes = [100, 100], [100, 100, 100]
 L = 8
 order = 3
-# Phi_sizes, F_sizes = (100, 100, 256), (100, 100, 100)
 
 # network training parameters
 num_epoch = 5
@@ -60,7 +59,7 @@ print('Model summary:')
 
 # build architecture
 model = EFN_moment(Phi_mapping_dim = [2, L],
-                   output_dim=1, output_act='sigmoid,
+                   output_dim=1, output_act='sigmoid',
                    Phi_sizes=Phi_sizes, Phi_acts='LeakyReLU',
                    F_sizes=F_sizes, F_acts='LeakyReLU',
                    order=order, architecture_type='moment',

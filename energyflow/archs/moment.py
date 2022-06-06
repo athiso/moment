@@ -153,78 +153,9 @@ class SymmetricPerParticleNN(NNBase):
 
     # EFN(*args, **kwargs)
     def _process_hps(self):
-        r"""See [`ArchBase`](#archbase) for how to pass in hyperparameters as
-        well as defaults common to all EnergyFlow neural network models.
-
-        **Required EFN Hyperparameters**
-
-        - **input_dim** : _int_
-            - The number of features for each particle.
-        - **Phi_sizes** (formerly `ppm_sizes`) : {_tuple_, _list_} of _int_
-            - The sizes of the dense layers in the per-particle frontend
-            module $\Phi$. The last element will be the number of latent 
-            observables that the model defines.
-        - **F_sizes** (formerly `dense_sizes`) : {_tuple_, _list_} of _int_
-            - The sizes of the dense layers in the backend module $F$.
-
-        **Default EFN Hyperparameters**
-
-        - **Phi_acts**=`'relu'` (formerly `ppm_acts`) : {_tuple_, _list_} of
-        _str_ or Keras activation
-            - Activation functions(s) for the dense layers in the 
-            per-particle frontend module $\Phi$. A single string or activation
-            layer will apply the same activation to all layers. Keras advanced
-            activation layers are also accepted, either as strings (which use
-            the default arguments) or as Keras `Layer` instances. If passing a
-            single `Layer` instance, be aware that this layer will be used for
-            all activations and may introduce weight sharing (such as with 
-            `PReLU`); it is recommended in this case to pass as many activations
-            as there are layers in the model. See the [Keras activations 
-            docs](https://keras.io/activations/) for more detail.
-        - **F_acts**=`'relu'` (formerly `dense_acts`) : {_tuple_, _list_} of
-        _str_ or Keras activation
-            - Activation functions(s) for the dense layers in the 
-            backend module $F$. A single string or activation layer will apply
-            the same activation to all layers.
-        - **Phi_k_inits**=`'he_uniform'` (formerly `ppm_k_inits`) : {_tuple_,
-        _list_} of _str_ or Keras initializer
-            - Kernel initializers for the dense layers in the per-particle
-            frontend module $\Phi$. A single string will apply the same
-            initializer to all layers. See the [Keras initializer docs](https:
-            //keras.io/initializers/) for more detail.
-        - **F_k_inits**=`'he_uniform'` (formerly `dense_k_inits`) : {_tuple_,
-        _list_} of _str_ or Keras initializer
-            - Kernel initializers for the dense layers in the backend 
-            module $F$. A single string will apply the same initializer 
-            to all layers.
-        - **latent_dropout**=`0` : _float_
-            - Dropout rates for the summation layer that defines the
-            value of the latent observables on the inputs. See the [Keras
-            Dropout layer](https://keras.io/layers/core/#dropout) for more 
-            detail.
-        - **F_dropouts**=`0` (formerly `dense_dropouts`) : {_tuple_, _list_}
-        of _float_
-            - Dropout rates for the dense layers in the backend module $F$. 
-            A single float will apply the same dropout rate to all dense layers.
-        - **Phi_l2_regs**=`0` : {_tuple_, _list_} of _float_
-            - $L_2$-regulatization strength for both the weights and biases
-            of the layers in the $\Phi$ network. A single float will apply the
-            same $L_2$-regulatization to all layers.
-        - **F_l2_regs**=`0` : {_tuple_, _list_} of _float_
-            - $L_2$-regulatization strength for both the weights and biases
-            of the layers in the $F$ network. A single float will apply the
-            same $L_2$-regulatization to all layers.
-        - **mask_val**=`0` : _float_
-            - The value for which particles with all features set equal to
-            this value will be ignored. The [Keras Masking layer](https://
-            keras.io/layers/core/#masking) appears to have issues masking
-            the biases of a network, so this has been implemented in a
-            custom (and correct) manner since version `0.12.0`.
-        - **num_global_features**=`None` : _int_
-            - Number of additional features to be concatenated with the latent
-            space observables to form the input to F. If not `None`, then the
-            features are to be provided at the end of the list of inputs.
-        """
+        #########################
+        #    See READ_ME file   #
+        #########################
 
         # process generic NN hps
         super(SymmetricPerParticleNN, self)._process_hps()

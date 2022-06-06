@@ -59,11 +59,11 @@ print('Model summary:')
 
 # build architecture
 model = EFN_moment(Phi_mapping_dim = [2, L],
-                   output_dim=1, output_act='sigmoid',
+                   output_dim=2, output_act='softmax',
                    Phi_sizes=Phi_sizes, Phi_acts='LeakyReLU',
                    F_sizes=F_sizes, F_acts='LeakyReLU',
                    order=order, architecture_type='moment',
-                   loss='binary_crossentropy',metrics='acc',  summary=True)
+                   loss='categorical_crossentropy',metrics='acc',  summary=True)
 
 # train model
 model.fit([z_train, p_train], Y_train,
@@ -73,7 +73,7 @@ model.fit([z_train, p_train], Y_train,
         verbose=1)
 
 # get predictions on test data
-preds = efn.predict([z_test, p_test], batch_size=1000)
+preds = model.predict([z_test, p_test], batch_size=1000)
 
 # get ROC curve
 efn_fp, efn_tp, threshs = roc_curve(Y_test[:,1], preds[:,1])
@@ -99,7 +99,7 @@ mass_fp, mass_tp, threshs = roc_curve(Y[:,1], -masses)
 mult_fp, mult_tp, threshs = roc_curve(Y[:,1], -mults)
 
 # plot the ROC curves
-axes[0].plot(efn_tp, 1-efn_fp, '-', color='black', label='EFN')
+axes[0].plot(efn_tp, 1-efn_fp, '-', color='black', label='Moment EFN')
 axes[0].plot(mass_tp, 1-mass_fp, '-', color='blue', label='Jet Mass')
 axes[0].plot(mult_tp, 1-mult_fp, '-', color='red', label='Multiplicity')
 
@@ -122,7 +122,7 @@ colors = ['Reds', 'Oranges', 'Greens', 'Blues', 'Purples', 'Greys']
 grads = np.linspace(0.45, 0.55, 4)
 
 # evaluate filters
-X, Y, Z = efn.eval_filters(R, n=n)
+X, Y, Z = model.eval_filters(R, n=n)
 
 # plot filters
 for i,z in enumerate(Z):

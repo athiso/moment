@@ -435,38 +435,6 @@ class PFN_moment(SymmetricPerParticleNN):
         # begin list of tensors with the inputs
         self._tensors = [self.weights] + self.inputs
 
-    def new_model(self, F_sizes):
-        nodes= F_sizes
-        act = 'LeakyReLU'
-        if self.cumulant == False:
-            tensor_list = [self.latent[-1]]
-        elif self.cumulant== True:
-            tensor_list = [self.cumulant_latent]
-        for i in range(len(nodes)):
-            layer = Dense(nodes[i], name='F{}'.format(i), activation=act)
-            tensor_list.append(layer(tensor_list[-1]))
-        output_layer = Dense(self.output_dim, name='output_layer', activation=self.output_act)
-        outputs = output_layer(tensor_list[-1])
-        model = Model(inputs=self.inputs, outputs=outputs)
-        model_copy = clone_model(model)
-        num_layers= len(nodes)+1
-        for l in model_copy.layers[:-num_layers]:
-            l.trainable=False
-        model_copy.compile(optimizer='adam',loss=self.loss,metrics='accuracy')
-        return model_copy
-
-    def remove_F(self, phi_trainable=True):
-        if self.cumulant == False:
-            outputs = self.latent[-1]
-        elif self.cumulant== True:
-            outputs = self.cumulant_latent
-        model = Model(inputs=self.inputs, outputs=outputs)
-        model_copy = clone_model(model)
-        if phi_trainable == False:
-            for l in model_copy.layers:
-                l.trainable=False
-        model_copy.compile(optimizer='adam',loss=self.loss,metrics='accuracy')
-        return model_copy
 
 
     @property

@@ -259,10 +259,10 @@ class SymmetricPerParticleNN(NNBase):
 
         for k, tensor in enumerate(tensor_list):
             names = [self._proc_name('tdist{}_{}'.format(k, i)) for i in range(len(self.Phi_sizes))]
-            if type(self.Phi_sizes[-1]) == int:
-                sizes = self.Phi_sizes
-            else:
+            if hasattr(self.Phi_sizes[-1], '__iter__'):
                 sizes = self.Phi_sizes[:-1] + [self.Phi_sizes[-1][k]]
+            else:
+                sizes = self.Phi_sizes
             Phi_layers, Phi_tensors = construct_distributed_dense(tensor, sizes, 
                                                                 acts=self.Phi_acts, 
                                                                 k_inits=self.Phi_k_inits, 

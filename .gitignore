@@ -1,0 +1,8 @@
+*.png
+*.pdf
+*.gif
+*.npy
+*main.py
+*test.py
+*.csv
+*.txt

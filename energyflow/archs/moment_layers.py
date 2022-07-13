@@ -4,7 +4,9 @@ from __future__ import absolute_import, division, print_function
 
 from tensorflow.keras import __version__ as __keras_version__
 from tensorflow.keras.layers import Layer
-from tensorflow import stack,concat,unstack,split,ones,shape
+from tensorflow import stack,concat,unstack,split,ones,shape, convert_to_tensor, transpose, expand_dims, reshape, reduce_prod, boolean_mask, greater, reduce_sum, cast
+from tensorflow.experimental.numpy import nonzero
+import numpy as np
 from itertools import chain, combinations
 
 __all__ = [
@@ -67,29 +69,39 @@ class Moment(Layer):
         self.order = order
         initial_id = ['a{}'.format(i) for i in range(latent_dim)]
         itmd_id_list = initial_id
+        self.moment_matrices = []
         self.id_list = initial_id
         for z in range(self.order -1):
+            matrix = np.array([[1 for x in list(flatten_list(itmd_id_list[i:]))] for i in range(len(itmd_id_list))])
+            max_length = len(matrix[0])
+            matrix = np.array([[0]* (max_length - len(row)) + row  for row in matrix], dtype='float32')
+            matrix = convert_to_tensor(matrix)
+            self.moment_matrices.append(transpose(matrix))
             itmd_id_list = [prepend(lst=itmd_id_list[i:],string=initial_id[i]) for i in range(latent_dim)]
             self.id_list.extend(list(flatten_list(itmd_id_list)))
+        self.boolean_masks = [greater(reshape(m, shape=[reduce_prod(shape(m))]), 0) for m in self.moment_matrices]
+        self.num_moments = [reduce_sum(cast(x, 'int32')) for x in self.boolean_masks]
     def get_config(self):
         config = super().get_config().copy()
         config.update({
             'latent_dim': self.latent_dim,
             'order': self.order,
-            'id_list': self.id_list
+            'id_list': self.id_list,
+            'moment_matrices' : self.moment_matrices,
+            'boolean_masks' : self.boolean_masks,
+            'num_moments' : self.num_moments
         })
         return config
 
     def call(self, inputs):
         latent_dim = self.latent_dim
-        L = stack(split(inputs, num_or_size_splits=latent_dim, axis =-1))
-        L2          = L
-        return_list = L
+        return_list = [inputs]
+        dims = shape(inputs[:,:,0])
         for z in range(self.order -1):
-            L2 = [L[i]*concat(L2[i:],axis=0) for i in range(latent_dim)]
-            return_list = concat([return_list] +L2, axis=0)
-        return_list = unstack(return_list)
-        return_tensor = concat([ones(shape=shape(L[0]))] + return_list,axis=-1)
+            tmp = reshape(self.moment_matrices[z]*expand_dims(return_list[z], axis=-1)* expand_dims(inputs, axis=-2), shape=[dims[0],dims[1],len(self.boolean_masks[z])])
+            masked_tmp = reshape(boolean_mask(tmp, self.boolean_masks[z], axis=2), shape=[dims[0],dims[1],self.num_moments[z]])
+            return_list.append(masked_tmp)
+        return_tensor = concat([expand_dims(ones(shape= dims), axis=-1)] + return_list,axis=-1)
         return return_tensor
 ##########################################
 # Cumulant Layer Class

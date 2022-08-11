@@ -14,7 +14,8 @@ from energyflow.archs.archbase import NNBase, _get_act_layer
 from energyflow.archs.dnn import construct_dense
 from energyflow.utils import iter_or_rep
 from energyflow.archs.moment_layers import Moment, Cumulant, Cumulant_Terms
-
+from tensorflow.keras.backend import function as func
+import matplotlib.pyplot as plt
 __all__ = [
 
     # input constructor functions
@@ -153,17 +154,94 @@ class SymmetricPerParticleNN(NNBase):
 
     # EFN(*args, **kwargs)
     def _process_hps(self):
-        #########################
-        #    See READ_ME file   #
-        #########################
+        r"""See [`ArchBase`](#archbase) for how to pass in hyperparameters as
+        well as defaults common to all EnergyFlow neural network models.
+
+        **Required EFN Hyperparameters**
+
+        - **input_dim** : _int_
+            - The number of features for each particle.
+        - **Phi_sizes** (formerly `ppm_sizes`) : {_tuple_, _list_} of _int_
+            - The sizes of the dense layers in the per-particle frontend
+            module $\Phi$. The last element will be the number of latent 
+            observables that the model defines.
+        - **F_sizes** (formerly `dense_sizes`) : {_tuple_, _list_} of _int_
+            - The sizes of the dense layers in the backend module $F$.
+
+        **Default EFN Hyperparameters**
+
+        - **Phi_acts**=`'relu'` (formerly `ppm_acts`) : {_tuple_, _list_} of
+        _str_ or Keras activation
+            - Activation functions(s) for the dense layers in the 
+            per-particle frontend module $\Phi$. A single string or activation
+            layer will apply the same activation to all layers. Keras advanced
+            activation layers are also accepted, either as strings (which use
+            the default arguments) or as Keras `Layer` instances. If passing a
+            single `Layer` instance, be aware that this layer will be used for
+            all activations and may introduce weight sharing (such as with 
+            `PReLU`); it is recommended in this case to pass as many activations
+            as there are layers in the model. See the [Keras activations 
+            docs](https://keras.io/activations/) for more detail.
+        - **F_acts**=`'relu'` (formerly `dense_acts`) : {_tuple_, _list_} of
+        _str_ or Keras activation
+            - Activation functions(s) for the dense layers in the 
+            backend module $F$. A single string or activation layer will apply
+            the same activation to all layers.
+        - **Phi_k_inits**=`'he_uniform'` (formerly `ppm_k_inits`) : {_tuple_,
+        _list_} of _str_ or Keras initializer
+            - Kernel initializers for the dense layers in the per-particle
+            frontend module $\Phi$. A single string will apply the same
+            initializer to all layers. See the [Keras initializer docs](https:
+            //keras.io/initializers/) for more detail.
+        - **F_k_inits**=`'he_uniform'` (formerly `dense_k_inits`) : {_tuple_,
+        _list_} of _str_ or Keras initializer
+            - Kernel initializers for the dense layers in the backend 
+            module $F$. A single string will apply the same initializer 
+            to all layers.
+        - **latent_dropout**=`0` : _float_
+            - Dropout rates for the summation layer that defines the
+            value of the latent observables on the inputs. See the [Keras
+            Dropout layer](https://keras.io/layers/core/#dropout) for more 
+            detail.
+        - **F_dropouts**=`0` (formerly `dense_dropouts`) : {_tuple_, _list_}
+        of _float_
+            - Dropout rates for the dense layers in the backend module $F$. 
+            A single float will apply the same dropout rate to all dense layers.
+        - **Phi_l2_regs**=`0` : {_tuple_, _list_} of _float_
+            - $L_2$-regulatization strength for both the weights and biases
+            of the layers in the $\Phi$ network. A single float will apply the
+            same $L_2$-regulatization to all layers.
+        - **F_l2_regs**=`0` : {_tuple_, _list_} of _float_
+            - $L_2$-regulatization strength for both the weights and biases
+            of the layers in the $F$ network. A single float will apply the
+            same $L_2$-regulatization to all layers.
+        - **mask_val**=`0` : _float_
+            - The value for which particles with all features set equal to
+            this value will be ignored. The [Keras Masking layer](https://
+            keras.io/layers/core/#masking) appears to have issues masking
+            the biases of a network, so this has been implemented in a
+            custom (and correct) manner since version `0.12.0`.
+        - **num_global_features**=`None` : _int_
+            - Number of additional features to be concatenated with the latent
+            space observables to form the input to F. If not `None`, then the
+            features are to be provided at the end of the list of inputs.
+        """
 
         # process generic NN hps
-        super(SymmetricPerParticleNN, self)._process_hps()
+        super(SymmetricPerParticleNN, self)._process_hps() #see archbase
 
         # required hyperparameters
         self.Phi_mapping_dim = self._proc_arg('Phi_mapping_dim') # list of pairs of input and output dim
         self.Phi_sizes = self._proc_arg('Phi_sizes', old='ppm_sizes')
         self.F_sizes = self._proc_arg('F_sizes', old='dense_sizes')
+        self.order = self._proc_arg('order')
+        
+        #DEFAULT hyperparameters
+
+        #architecture type
+        self.architecture_type = self._proc_arg('architecture_type', default='moment') #moment,cumulant,mixed
+
+        #use bias
         self.bias = self._proc_arg('bias', default = True)
 
         # activations
@@ -190,8 +268,6 @@ class SymmetricPerParticleNN(NNBase):
 
         # additional network modifications
         self.num_global_features = self._proc_arg('num_global_features', default=None)
-        self.order = self._proc_arg('order')
-        self.architecture_type =self._proc_arg('architecture_type', default='moment') #moment, cumulant, mixed
         self.rweighted = self._proc_arg('rweighted', default=False) #only if using r, sin, cos as input variables
 
         self._verify_empty_hps()
@@ -435,6 +511,38 @@ class PFN_moment(SymmetricPerParticleNN):
         # begin list of tensors with the inputs
         self._tensors = [self.weights] + self.inputs
 
+    def new_model(self, F_sizes):
+        nodes= F_sizes
+        act = 'LeakyReLU'
+        if self.cumulant == False:
+            tensor_list = [self.latent[-1]]
+        elif self.cumulant== True:
+            tensor_list = [self.cumulant_latent]
+        for i in range(len(nodes)):
+            layer = Dense(nodes[i], name='F{}'.format(i), activation=act)
+            tensor_list.append(layer(tensor_list[-1]))
+        output_layer = Dense(self.output_dim, name='output_layer', activation=self.output_act)
+        outputs = output_layer(tensor_list[-1])
+        model = Model(inputs=self.inputs, outputs=outputs)
+        model_copy = clone_model(model)
+        num_layers= len(nodes)+1
+        for l in model_copy.layers[:-num_layers]:
+            l.trainable=False
+        model_copy.compile(optimizer='adam',loss=self.loss,metrics='accuracy')
+        return model_copy
+
+    def remove_F(self, phi_trainable=True):
+        if self.cumulant == False:
+            outputs = self.latent[-1]
+        elif self.cumulant== True:
+            outputs = self.cumulant_latent
+        model = Model(inputs=self.inputs, outputs=outputs)
+        model_copy = clone_model(model)
+        if phi_trainable == False:
+            for l in model_copy.layers:
+                l.trainable=False
+        model_copy.compile(optimizer='adam',loss=self.loss,metrics='accuracy')
+        return model_copy
 
 
     @property
@@ -500,7 +608,65 @@ class EFN_moment(SymmetricPerParticleNN):
         """
 
         return self._weights
+    def _mesh(self, patch, inputs, outputs, latent, n=100, prune=True):
+        if isinstance(patch, (float, int)):
+            if patch > 0:
+                xmin, ymin, xmax, ymax = -patch, -patch, patch, patch
+            else:
+                ValueError('patch must be positive when passing as a single number.')
+        else:
+            xmin, ymin, xmax, ymax = patch
+        if isinstance(n, int):
+            nx = ny = n
+        else:
+            nx, ny = n
 
+        xs, ys = np.linspace(xmin, xmax, nx), np.linspace(ymin, ymax, ny)
+        X, Y = np.meshgrid(xs, ys, indexing='ij')
+        XY = np.asarray([X, Y]).reshape((1, 2, nx*ny)).transpose((0, 2, 1))
+
+        kf = func(inputs,outputs)
+
+        # evaluate function
+        Z = kf(XY)[0].reshape(nx, ny, latent).transpose((2, 0, 1))
+
+        # prune filters that are off
+        if prune:
+            return X, Y, Z[[not (z == 0).all() for z in Z]]
+
+        return X, Y, Z
+    def plot_phis(self, patch, contour_steps=10):
+        colors = ['Reds', 'Oranges', 'Greens', 'Blues', 'Purples', 'Greys']
+        if type(self.Phi_mapping_dim[0]) == int:
+            outputs = self.Phi[-1]
+            dim = outputs.shape[-1]
+            X,Y,Z = self._mesh(patch, self._phi_inputs, outputs, dim)
+        else:
+            ##factorization stuff
+            pass
+        fig, axes = plt.subplots(1, dim, figsize=(dim*5+dim,5))
+    
+        if dim==1:
+            axes = [axes]
+        else:
+            axes = axes.ravel()
+        for p,z in enumerate(Z):
+            if np.min(z) == np.max(z):
+                pass
+            else:
+                grads= np.linspace(np.min(z), np.max(z), contour_steps)
+                cs = axes[p].contourf(X, Y, z, grads, cmap=colors[p%len(colors)])
+                fig.colorbar(cs, ax=axes[p], shrink=1)
+
+
+            axes[p].set_xticks(np.linspace(-patch, patch, 5))
+            axes[p].set_yticks(np.linspace(-patch, patch, 5))
+            axes[p].set_xticklabels(['-{}'.format(patch), '-{}'.format(patch/2), '0', '{}'.format(patch/2), str(patch)])
+            axes[p].set_yticklabels(['-{}'.format(patch), '-{}'.format(patch/2), '0', '{}'.format(patch/2), str(patch)])
+            axes[p].set_xlabel('Rapidity y')
+            axes[p].set_ylabel('Azimuthal Angle phi')
+        plt.show()
+        return fig, axes
     # eval_filters(patch, n=100, prune=True)
     def eval_filters(self, patch, n=100, prune=True):
         """Evaluates the latent space filters of this model on a patch of the 

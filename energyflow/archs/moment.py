@@ -351,7 +351,7 @@ class SymmetricPerParticleNN(NNBase):
             self._tensors.extend(Phi_tensors)
         
         if self.rweighted == True:
-            combined_phi = concat(phi_list[:-1] + [phi_list[-1]*self.inputs[-2]], axis=-1, name='combined_phi')
+            combined_phi = concat(phi_list[:-1] + [phi_list[-1]*self.phi_inputs[0]], axis=-1, name='combined_phi')
         else:
             combined_phi = concat(phi_list, axis=-1, name='combined_phi')
         self._tensors.append(combined_phi)

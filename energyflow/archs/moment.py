@@ -288,6 +288,7 @@ class SymmetricPerParticleNN(NNBase):
 
         latent_dim = self.tensors[-1].get_shape().as_list()[-1]
         self._construct_Phi_moment(latent_dim, self.order)
+        self.moment_output = self.tensors[-1]
         self._construct_latent()
     
         if self.architecture_type == 'moment':
@@ -363,6 +364,7 @@ class SymmetricPerParticleNN(NNBase):
         # store inds
         self._layer_inds['Phi'] = layer_inds
         self._tensor_inds['Phi'] = tensor_inds
+        self.phi_list = phi_list
     
     def _construct_Phi_moment(self, latent_dim, order):
         moment_layer = Moment(latent_dim=latent_dim, order=order)
@@ -608,127 +610,13 @@ class EFN_moment(SymmetricPerParticleNN):
         """
 
         return self._weights
-    def _mesh(self, patch, inputs, outputs, latent, n=100, prune=True):
-        if isinstance(patch, (float, int)):
-            if patch > 0:
-                xmin, ymin, xmax, ymax = -patch, -patch, patch, patch
-            else:
-                ValueError('patch must be positive when passing as a single number.')
-        else:
-            xmin, ymin, xmax, ymax = patch
-        if isinstance(n, int):
-            nx = ny = n
-        else:
-            nx, ny = n
 
-        xs, ys = np.linspace(xmin, xmax, nx), np.linspace(ymin, ymax, ny)
-        X, Y = np.meshgrid(xs, ys, indexing='ij')
-        XY = np.asarray([X, Y]).reshape((1, 2, nx*ny)).transpose((0, 2, 1))
-
-        kf = func(inputs,outputs)
-
-        # evaluate function
-        Z = kf(XY)[0].reshape(nx, ny, latent).transpose((2, 0, 1))
-
-        # prune filters that are off
-        if prune:
-            return X, Y, Z[[not (z == 0).all() for z in Z]]
-
-        return X, Y, Z
-    def plot_phis(self, patch, contour_steps=10):
-        colors = ['Reds', 'Oranges', 'Greens', 'Blues', 'Purples', 'Greys']
-        if type(self.Phi_mapping_dim[0]) == int:
-            outputs = self.Phi[-1]
-            dim = outputs.shape[-1]
-            X,Y,Z = self._mesh(patch, self._phi_inputs, outputs, dim)
-        else:
-            ##factorization stuff
-            pass
-        fig, axes = plt.subplots(1, dim, figsize=(dim*5+dim,5))
+    def phi_functions(self):
+        return [func(self._phi_inputs[i], self.phi_list[i]) for i in range(len(self._phi_inputs))]
     
-        if dim==1:
-            axes = [axes]
-        else:
-            axes = axes.ravel()
-        for p,z in enumerate(Z):
-            if np.min(z) == np.max(z):
-                pass
-            else:
-                grads= np.linspace(np.min(z), np.max(z), contour_steps)
-                cs = axes[p].contourf(X, Y, z, grads, cmap=colors[p%len(colors)])
-                fig.colorbar(cs, ax=axes[p], shrink=1)
+    def moments(self):
+        return func(self.phi_inputs, self.moment_output)
 
 
-            axes[p].set_xticks(np.linspace(-patch, patch, 5))
-            axes[p].set_yticks(np.linspace(-patch, patch, 5))
-            axes[p].set_xticklabels(['-{}'.format(patch), '-{}'.format(patch/2), '0', '{}'.format(patch/2), str(patch)])
-            axes[p].set_yticklabels(['-{}'.format(patch), '-{}'.format(patch/2), '0', '{}'.format(patch/2), str(patch)])
-            axes[p].set_xlabel('Rapidity y')
-            axes[p].set_ylabel('Azimuthal Angle phi')
-        plt.show()
-        return fig, axes
-    # eval_filters(patch, n=100, prune=True)
-    def eval_filters(self, patch, n=100, prune=True):
-        """Evaluates the latent space filters of this model on a patch of the 
-        two-dimensional geometric input space.
 
-        **Arguments**
-
-        - **patch** : {_tuple_, _list_} of _float_
-            - Specifies the patch of the geometric input space to be evaluated.
-            A list of length 4 is interpretted as `[xmin, ymin, xmax, ymax]`.
-            Passing a single float `R` is equivalent to `[-R,-R,R,R]`.
-        - **n** : {_tuple_, _list_} of _int_
-            - The number of grid points on which to evaluate the filters. A list 
-            of length 2 is interpretted as `[nx, ny]` where `nx` is the number of
-            points along the x (or first) dimension and `ny` is the number of points
-            along the y (or second) dimension.
-        - **prune** : _bool_
-            - Whether to remove filters that are all zero (which happens sometimes
-            due to dying ReLUs).
-
-        **Returns**
-
-        - (_numpy.ndarray_, _numpy.ndarray_, _numpy.ndarray_)
-            - Returns three arrays, `(X, Y, Z)`, where `X` and `Y` have shape `(nx, ny)` 
-            and are arrays of the values of the geometric inputs in the specified patch.
-            `Z` has shape `(num_filters, nx, ny)` and is the value of the different
-            filters at each point.
-        """
-
-        # determine patch of xy space to evaluate filters on
-        if isinstance(patch, (float, int)):
-            if patch > 0:
-                xmin, ymin, xmax, ymax = -patch, -patch, patch, patch
-            else:
-                ValueError('patch must be positive when passing as a single number.')
-        else:
-            xmin, ymin, xmax, ymax = patch
-
-        # determine number of pixels in each dimension
-        if isinstance(n, int):
-            nx = ny = n
-        else:
-            nx, ny = n
-
-        # construct grid of inputs
-        xs, ys = np.linspace(xmin, xmax, nx), np.linspace(ymin, ymax, ny)
-        X, Y = np.meshgrid(xs, ys, indexing='ij')
-        XY = np.asarray([X, Y]).reshape((1, 2, nx*ny)).transpose((0, 2, 1))
-
-        # handle weirdness of Keras/tensorflow
-        old_keras = (keras_version_tuple <= (2, 2, 5))
-        s = self.Phi_sizes[-1] if len(self.Phi_sizes) else self.input_dim
-        in_t, out_t = self.inputs[1], self.Phi[-1]
-
-        # construct function
-        kf = K.function([in_t] if old_keras else in_t, [out_t] if old_keras else out_t)
-
-        # evaluate function
-        Z = kf([XY] if old_keras else XY)[0].reshape(nx, ny, s).transpose((2, 0, 1))
-
-        # prune filters that are off
-        if prune:
-            return X, Y, Z[[not (z == 0).all() for z in Z]]
-        
-        return X, Y, Z
+ 

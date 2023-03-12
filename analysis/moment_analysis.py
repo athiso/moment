@@ -4,14 +4,14 @@ from sklearn.utils import shuffle
 
 class ModelsContainer:
     def __init__(self, Phi_mapping_dim, output_dim, Phi_sizes, F_sizes, order, loss, metrics, 
-                architecture_type='moment', F_acts='LeakyReLU', Phi_acts='LeakyReLU', output_act='sigmoid'):
+                architecture_type='moment', F_acts='LeakyReLU', Phi_acts='LeakyReLU', output_act='sigmoid', use_bias = 'True'):
     
         self.config = {'Phi_mapping_dim' : Phi_mapping_dim,
                     'output_dim' : output_dim, 'output_act' : output_act,
                     'Phi_sizes' : Phi_sizes, 'Phi_acts' : Phi_acts,
                     'F_sizes' : F_sizes, 'F_acts': F_acts,
                     'order' : order , 'architecture_type':architecture_type,
-                    'loss': loss,'metrics': metrics}
+                    'loss': loss,'metrics': metrics, 'use_bias' : use_bias}
   
         self.models = []
         self.histories = []

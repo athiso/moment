@@ -8,7 +8,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras import __version__ as __keras_version__
 from tensorflow.keras.layers import Dense, Dot, Dropout, Input, Lambda, TimeDistributed
 from tensorflow.keras.models import Model, clone_model
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.regularizers import L1L2
 from tensorflow import concat
 from energyflow.archs.archbase import NNBase, _get_act_layer
 from energyflow.archs.dnn import construct_dense
@@ -100,23 +100,24 @@ def construct_pfn_weight_mask(input_tensor, mask_val=0., name=None):
 ################################################################################
 
 def construct_distributed_dense(input_tensor, sizes, acts='relu', k_inits='he_uniform', 
-                                                                  names=None, l2_regs=0., use_bias=True):
+                                                                  names=None, l1_regs=0., l2_regs=0., use_bias=True):
     """"""
 
     # repeat options if singletons
     acts, k_inits, names = iter_or_rep(acts), iter_or_rep(k_inits), iter_or_rep(names)
     l2_regs = iter_or_rep(l2_regs)
+    l1_regs = iter_or_rep(l1_regs)
     
     # list of tensors
     layers, tensors = [], [input_tensor]
 
     # iterate over specified layers
-    for s, act, k_init, name, l2_reg in zip(sizes, acts, k_inits, names, l2_regs):
+    for s, act, k_init, name, l1_reg, l2_reg in zip(sizes, acts, k_inits, names, l1_regs, l2_regs):
         
         # define a dense layer that will be applied through time distributed
         kwargs = {} 
-        if l2_reg > 0.:
-            kwargs.update({'kernel_regularizer': l2(l2_reg), 'bias_regularizer': l2(l2_reg)})
+        if l1_reg > 0 or l2_reg > 0.:
+            kwargs.update({'kernel_regularizer': L1L2(l1_reg, l2_reg), 'bias_regularizer': L1L2(l1_reg, l2_reg)})
         d_layer = Dense(s, kernel_initializer=k_init, use_bias=use_bias, **kwargs)
 
         # get layers and append them to list
@@ -262,7 +263,8 @@ class SymmetricPerParticleNN(NNBase):
                                                                    old='dense_dropouts'))
         self.Phi_l2_regs = iter_or_rep(self._proc_arg('Phi_l2_regs', default=0.))
         self.F_l2_regs   = iter_or_rep(self._proc_arg('F_l2_regs', default=0.))
-
+        self.Phi_l1_regs = iter_or_rep(self._proc_arg('Phi_l1_regs', default=0.))
+        self.F_l1_regs   = iter_or_rep(self._proc_arg('F_l1_regs', default=0.))
         # masking
         self.mask_val = self._proc_arg('mask_val', default=0.)
 
@@ -297,7 +299,7 @@ class SymmetricPerParticleNN(NNBase):
             self._construct_Phi_cumulant(latent_dim, self.order)
         
         elif self.architecture_type == 'mixed':
-            self._construct_Phi_cumulant_terms(latent_dim, self.order)
+            self._construct_Phi_cumulant_terms(self.tensors[-1].get_shape().as_list()[-1], self.order)
 
         else:
             raise ValueError('Value of architecture_type argument must be "moment", "cumulant", or "mixed"')
@@ -343,7 +345,8 @@ class SymmetricPerParticleNN(NNBase):
             Phi_layers, Phi_tensors = construct_distributed_dense(tensor, sizes, 
                                                                 acts=self.Phi_acts, 
                                                                 k_inits=self.Phi_k_inits, 
-                                                                names=names, 
+                                                                names=names,
+                                                                l1_regs=self.Phi_l1_regs, 
                                                                 l2_regs=self.Phi_l2_regs,
                                                                 use_bias = self.bias)
             phi_list.append(Phi_tensors[-1])
@@ -419,6 +422,7 @@ class SymmetricPerParticleNN(NNBase):
         F_layers, F_tensors = construct_dense(self.tensors[-1], self.F_sizes,
                                               acts=self.F_acts, k_inits=self.F_k_inits, 
                                               dropouts=self.F_dropouts, names=names,
+                                              l1_regs=self.F_l1_regs,
                                               l2_regs=self.F_l2_regs)
 
         # add layers and tensors to internal lists

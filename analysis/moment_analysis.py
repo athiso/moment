@@ -10,6 +10,8 @@ class ModelsContainer:
                     'output_dim' : output_dim, 'output_act' : output_act,
                     'Phi_sizes' : Phi_sizes, 'Phi_acts' : Phi_acts,
                     'F_sizes' : F_sizes, 'F_acts': F_acts,
+                    'F_l1_regs' : F_l1_regs, 'Phi_l1_regs' : Phi_l1_regs,
+                    'F_l2_regs' : F_l2_regs, 'Phi_l2_regs' : Phi_l2_regs,
                     'order' : order , 'architecture_type':architecture_type,
                     'loss': loss,'metrics': metrics, 'use_bias' : use_bias}
   

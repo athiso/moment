@@ -413,8 +413,8 @@ class SymmetricPerParticleNN(NNBase):
     def _construct_F(self):
 
         # get names
-        names = [self._proc_name('dense_{}'.format(i)) for i in range(len(self.F_sizes))]
-
+        names1 = [self._proc_name('dense1_{}'.format(i)) for i in range(len(self.F1_sizes))]
+        names2 = [self._proc_name('dense2_{}'.format(i)) for i in range(len(self.F2_sizes))]
         # determine begin inds
         layer_inds, tensor_inds = [len(self.layers)], [len(self.tensors)]
 
@@ -422,13 +422,13 @@ class SymmetricPerParticleNN(NNBase):
         # construct F
         F_layers, F_tensors = construct_dense(self.tensors[-1], self.F1_sizes,
                                               acts=self.F_acts, k_inits=self.F_k_inits, 
-                                              dropouts=self.F_dropouts, names=names,
+                                              dropouts=self.F_dropouts, names=names1,
                                               l1_regs=self.F_l1_regs,
                                               l2_regs=self.F_l2_regs)
         
         F2_layers, F2_tensors = construct_dense(self.tensors[-1], self.F2_sizes,
                                               acts=self.F_acts, k_inits=self.F_k_inits, 
-                                              dropouts=self.F_dropouts, names=names,
+                                              dropouts=self.F_dropouts, names=names2,
                                               l1_regs=self.F_l1_regs,
                                               l2_regs=self.F_l2_regs)
         # add layers and tensors to internal lists
